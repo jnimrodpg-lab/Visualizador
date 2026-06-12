@@ -23,7 +23,8 @@
     groupTotalProducts: 0,
     authMode: 'login',
     headers: [],
-    mapping: {}
+    mapping: {},
+    sidebarCollapsed: localStorage.getItem('catalogoSidebarCollapsed') === '1'
   };
 
   const fields = [
@@ -146,6 +147,8 @@
 
   function bindEvents() {
     $$('.nav-item').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
+    $('#btnToggleSidebar')?.addEventListener('click', toggleSidebar);
+    applySidebarState();
     $('#btnGoSheet').addEventListener('click', () => setView('sheet'));
     $('#btnAuth').addEventListener('click', authAction);
     $('#btnCloseAuth').addEventListener('click', () => $('#authModal').classList.remove('show'));
@@ -166,6 +169,10 @@
     $('#btnShareViewer').addEventListener('click', generateViewerLink);
     $('#btnCopyViewer').addEventListener('click', generateViewerLink);
     $('#btnOpenProductViewer')?.addEventListener('click', e => { e.stopPropagation(); openActiveProductCard(); });
+    $('#activeProductCard')?.addEventListener('click', e => {
+      if (e.target.closest('button, select, input, textarea, a, video, iframe')) return;
+      openActiveProductCard();
+    });
     $('#btnCopyProductInfo')?.addEventListener('click', e => { e.stopPropagation(); copySelectedProductInfo(); });
     $('#btnScanFake')?.addEventListener('click', () => toast('Puedes pegar o escanear el código con un lector físico en la barra de búsqueda.'));
     $('#searchCardOverlay')?.addEventListener('click', closeActiveProductCard);
@@ -391,7 +398,11 @@
         const yt = (src.match(/[?&]v=([^&]+)/) || src.match(/youtu\.be\/([^?]+)/) || [])[1];
         if (yt) return `<iframe loading="lazy" src="https://www.youtube.com/embed/${esc(yt)}" allowfullscreen></iframe>`;
       }
-      if (id) return `<iframe loading="lazy" src="https://drive.google.com/file/d/${esc(id)}/preview" allowfullscreen></iframe>`;
+      if (id) {
+        const poster = `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1200`;
+        const proxy = `${API}/drive-video?id=${encodeURIComponent(id)}`;
+        return `<video src="${esc(proxy)}" poster="${esc(poster)}" controls playsinline preload="metadata"></video>`;
+      }
       if (/\.mp4($|\?)/i.test(src)) return `<video src="${esc(src)}" controls ${mode === 'card' ? 'muted' : ''}></video>`;
     }
     const finalSrc = id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1600` : src;
@@ -537,7 +548,7 @@
         const currentOther = key === 'talla' ? val(product,'color') : val(product,'talla');
         const exact = siblings.find(p => norm(val(p,key)) === norm(wanted) && (!currentOther || norm(val(p, key === 'talla' ? 'color':'talla')) === norm(currentOther)));
         const fallback = siblings.find(p => norm(val(p,key)) === norm(wanted));
-        const picked = exact || fallback || item.product;
+        const picked = exact || fallback || siblings.find(Boolean) || product;
         if (picked && product._groupItems && !picked._groupItems) picked._groupItems = product._groupItems;
         if (picked && product._groupKey && !picked._groupKey) picked._groupKey = product._groupKey;
         selectProduct(picked);
@@ -822,6 +833,23 @@
       setView('settings');
     } catch (err) { toast(err.message, 'bad'); }
   }
+
+  function applySidebarState() {
+    document.body.classList.toggle('sidebar-collapsed', !!state.sidebarCollapsed);
+    const btn = $('#btnToggleSidebar');
+    if (btn) {
+      btn.textContent = state.sidebarCollapsed ? '☰' : '‹';
+      btn.setAttribute('aria-label', state.sidebarCollapsed ? 'Expandir menú' : 'Minimizar menú');
+      btn.title = state.sidebarCollapsed ? 'Expandir menú' : 'Minimizar menú';
+    }
+  }
+
+  function toggleSidebar() {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    localStorage.setItem('catalogoSidebarCollapsed', state.sidebarCollapsed ? '1' : '0');
+    applySidebarState();
+  }
+
 
   setAuthMode('login');
   init();

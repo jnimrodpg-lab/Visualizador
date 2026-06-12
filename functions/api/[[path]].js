@@ -32,7 +32,8 @@ export async function onRequest(context) {
     }
 
     if (path === '/drive-video' && request.method === 'GET') {
-      await requireAuth(request, env.DB);
+      // Este proxy evita insertar iframes de Google Drive, que suelen ser bloqueados por CSP
+      // (frame-ancestors). Solo entrega archivos públicos de Drive por ID/URL.
       return proxyGoogleDriveVideo(request, url);
     }
 
