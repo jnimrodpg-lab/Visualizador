@@ -7,7 +7,7 @@ ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"
 DEFAULT_COMPANY_NAME = "Catálogo Visual"
 DEFAULT_COMPANY_CODE = "CAT-CF"
-DB_NAME = "wms-industrial-db"
+DB_NAME = "catalogo-pg-db"
 
 [[d1_databases]]
 binding = "DB"
