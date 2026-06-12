@@ -11,5 +11,5 @@ DB_NAME = "wms-industrial-db"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "wms-industrial-db"
-database_id = "a287bf47-2f4c-4084-a70e-ade661c46ce4"
+database_name = "catalogo-pg-db"
+database_id = "617b2188-448f-4474-9d92-e5a86957bbb0"
