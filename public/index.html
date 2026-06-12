@@ -187,8 +187,8 @@
       <div class="section-head compact">
         <div>
           <div class="eyebrow">Acceso</div>
-          <h2>Entrar como administrador</h2>
-          <p>El cliente puede ver el catálogo desde un link público. Para vincular Sheets necesitas iniciar sesión.</p>
+          <h2>Entrar al catálogo</h2>
+          <p>Admin puede vincular Sheets y configurar. Viewer solo observa y busca productos.</p>
         </div>
       </div>
       <div class="auth-tabs">
@@ -200,6 +200,7 @@
         <label>Contraseña<input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" /></label>
         <label class="register-only">Empresa<input id="companyName" placeholder="Mi empresa" /></label>
         <label class="register-only">Código empresa opcional<input id="companyCode" placeholder="CAT-001" /></label>
+        <label class="register-only">Modo de cuenta<select id="accountRole"><option value="admin">Admin: puede editar</option><option value="viewer">Viewer: solo observa</option></select></label>
       </div>
       <div class="auth-status" id="authStatus"></div>
       <div class="action-row end">
@@ -210,6 +211,6 @@
   </div>
 
   <div class="toast-stack" id="toastStack"></div>
-  <script src="./assets/app-main.js?v=client-catalog-v2"></script>
+  <script src="./assets/app-main.js?v=client-catalog-v3"></script>
 </body>
 </html>

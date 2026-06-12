@@ -538,11 +538,21 @@ export async function onRequest(context) {
 
         const products = await getImportedProductsForBranch(env.DB, branchId);
         const filtered = filterImportedProducts(products, q, filters);
-        const total = filtered.length;
+        const groupBy = String(url.searchParams.get('group_by') || '').trim().toLowerCase();
+        let output = filtered;
+        let grouped = false;
+        let groupTotalProducts = filtered.length;
+
+        if (groupBy === 'name' || groupBy === 'nombre') {
+          output = groupProductsByName(filtered);
+          grouped = true;
+        }
+
+        const total = output.length;
         const totalPages = Math.max(1, Math.ceil(total / limit));
         const safePage = Math.min(page, totalPages);
         const start = (safePage - 1) * limit;
-        const items = filtered.slice(start, start + limit);
+        const items = output.slice(start, start + limit);
 
         return withJson({
           ok: true,
@@ -551,6 +561,8 @@ export async function onRequest(context) {
           page: safePage,
           limit,
           total_pages: totalPages,
+          grouped,
+          group_total_products: groupTotalProducts,
           facets: buildProductFacets(products),
           summary: buildProductSummary(products),
           build: BUILD_MARK
@@ -1586,6 +1598,62 @@ function productHasStock(product) {
   if (!raw) return false;
   const numeric = Number(String(raw).replace(',', '.').replace(/[^0-9.-]/g, ''));
   return Number.isFinite(numeric) ? numeric > 0 : true;
+}
+
+
+function productGroupIdentity(product) {
+  const name = productValue(product, ['nombre', 'Nombre', 'name', 'producto']).trim();
+  const brand = productValue(product, ['marca', 'brand']).trim();
+  const base = name || productValue(product, ['sku', 'Sku', 'SKU', 'barras', 'barcode']).trim() || 'Sin nombre';
+  return `${normalizeSearchText(base)}¦${normalizeSearchText(brand)}`;
+}
+
+function uniqueNonEmpty(values) {
+  const seen = new Map();
+  for (const value of values || []) {
+    const clean = String(value || '').trim();
+    if (!clean) continue;
+    const key = normalizeSearchText(clean);
+    if (!seen.has(key)) seen.set(key, clean);
+  }
+  return [...seen.values()];
+}
+
+function groupProductsByName(products) {
+  const groups = new Map();
+  for (const product of products || []) {
+    const key = productGroupIdentity(product);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(product);
+  }
+
+  return [...groups.entries()].map(([key, items]) => {
+    const preferred = items.find(productHasImage) || items[0] || {};
+    const sizes = uniqueNonEmpty(items.map(p => productValue(p, ['talla', 'Talla', 'size'])));
+    const colors = uniqueNonEmpty(items.map(p => productValue(p, ['color', 'Color'])));
+    const locations = uniqueNonEmpty(items.map(p => productValue(p, ['ubicacion', 'ubicación', 'location']) || [
+      productValue(p, ['zona', 'zone']),
+      productValue(p, ['estante', 'rack']),
+      productValue(p, ['nivel']),
+      productValue(p, ['slot'])
+    ].filter(Boolean).join('-')));
+    const warehouses = uniqueNonEmpty(items.map(p => productValue(p, ['almacen', 'almacén', 'warehouse'])));
+    const skus = uniqueNonEmpty(items.map(p => productValue(p, ['sku', 'Sku', 'SKU']) || productValue(p, ['barras', 'barcode'])));
+
+    return {
+      ...preferred,
+      _grouped: true,
+      _groupKey: key,
+      _groupName: productValue(preferred, ['nombre', 'Nombre', 'name', 'producto']) || 'Sin nombre',
+      _groupItems: items,
+      _variantCount: items.length,
+      _sizeOptions: sizes,
+      _colorOptions: colors,
+      _locationOptions: locations,
+      _warehouseOptions: warehouses,
+      _skuOptions: skus
+    };
+  }).sort((a, b) => String(a._groupName || '').localeCompare(String(b._groupName || ''), 'es'));
 }
 
 function filterImportedProducts(products, q, filters = {}) {

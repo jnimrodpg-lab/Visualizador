@@ -19,6 +19,8 @@
     totalPages: 1,
     total: 0,
     selected: null,
+    currentGroups: [],
+    groupTotalProducts: 0,
     authMode: 'login',
     headers: [],
     mapping: {}
@@ -86,7 +88,11 @@
     return state.branches.find(b => String(b.id) === String(state.branchId)) || state.branches[0] || null;
   }
 
+  function isAdmin() { return !!state.auth && String(state.auth.role || '').toLowerCase() === 'admin'; }
+  function isViewer() { return state.publicMode || (!!state.auth && String(state.auth.role || '').toLowerCase() !== 'admin'); }
+
   function setView(name) {
+    if ((name === 'sheet' || name === 'settings') && !isAdmin()) name = 'catalog';
     $$('.view').forEach(v => v.classList.remove('active'));
     $(`#view${name[0].toUpperCase() + name.slice(1)}`)?.classList.add('active');
     $$('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.view === name));
@@ -95,19 +101,23 @@
   function hydrateSessionLabel() {
     const pill = $('#sessionPill');
     if (state.publicMode) {
-      pill.textContent = 'Link cliente público';
+      pill.textContent = 'Modo viewer · link público';
       $('#adminNav').classList.add('hidden');
       $('#btnAuth').classList.add('hidden');
       $('#btnGoSheet').classList.add('hidden');
       $('#btnShareViewer').classList.add('hidden');
+      document.body.classList.add('viewer-mode');
       return;
     }
     const logged = !!state.auth;
-    pill.textContent = logged ? `${state.auth.user} · ${state.auth.role}` : 'Sin sesión';
-    $('#btnAuth').textContent = logged ? 'Cerrar sesión' : 'Ingresar admin';
-    $('#adminNav').classList.toggle('hidden', !logged);
-    $('#btnGoSheet').classList.toggle('hidden', !logged);
-    $('#btnShareViewer').classList.toggle('hidden', !logged);
+    const admin = isAdmin();
+    pill.textContent = logged ? `${state.auth.user} · ${admin ? 'admin' : 'viewer'}` : 'Sin sesión';
+    $('#btnAuth').textContent = logged ? 'Cerrar sesión' : 'Ingresar';
+    $('#adminNav').classList.toggle('hidden', !admin);
+    $('#btnGoSheet').classList.toggle('hidden', !admin);
+    $('#btnShareViewer').classList.toggle('hidden', !admin);
+    document.body.classList.toggle('viewer-mode', logged && !admin);
+    if (logged && !admin) setView('catalog');
   }
 
   async function init() {
@@ -144,6 +154,7 @@
     $('#branchSelect').addEventListener('change', async () => { state.branchId = $('#branchSelect').value; state.page = 1; await loadSheetConfig(); await loadProducts(); });
     $('#btnReloadProducts').addEventListener('click', () => loadProducts());
     $('#btnSearch').addEventListener('click', () => { state.page = 1; loadProducts(); });
+    $('#btnIndividualView')?.addEventListener('click', () => openActiveProductCard());
     $('#searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { state.page = 1; loadProducts(); } });
     ['filterBrand','filterCategory','filterWarehouse','filterImage'].forEach(id => $(`#${id}`).addEventListener('change', () => { state.page = 1; loadProducts(); }));
     $('#btnClearFilters').addEventListener('click', () => { ['searchInput','filterBrand','filterCategory','filterWarehouse','filterImage'].forEach(id => $(`#${id}`).value = ''); state.page = 1; loadProducts(); });
@@ -188,7 +199,7 @@
     const payload = {
       username: $('#loginUsername').value.trim(),
       password: $('#loginPassword').value,
-      mode: 'admin',
+      mode: $('#accountRole')?.value || 'admin',
       companyName: $('#companyName').value.trim(),
       companyCode: $('#companyCode').value.trim()
     };
@@ -260,7 +271,7 @@
   async function loadProducts() {
     if (state.publicMode) return renderLocalPublicProducts();
     if (!state.branchId || !state.auth) return;
-    const params = new URLSearchParams({ page: String(state.page), limit: String(PAGE_SIZE), q: $('#searchInput').value.trim() });
+    const params = new URLSearchParams({ page: String(state.page), limit: String(PAGE_SIZE), q: $('#searchInput').value.trim(), group_by: 'name' });
     const map = { filterBrand:'brand', filterCategory:'category', filterWarehouse:'warehouse', filterImage:'image_state' };
     Object.entries(map).forEach(([id,key]) => { const v = $(`#${id}`).value; if (v) params.set(key, v); });
     try {
@@ -269,6 +280,7 @@
       state.facets = data.facets || {};
       state.summary = data.summary || {};
       state.total = Number(data.total || 0);
+      state.groupTotalProducts = Number(data.group_total_products || 0);
       state.page = Number(data.page || 1);
       state.totalPages = Number(data.total_pages || 1);
       renderFacets();
@@ -286,7 +298,7 @@
     const category = norm($('#filterCategory')?.value || '');
     const warehouse = norm($('#filterWarehouse')?.value || '');
     const imageState = $('#filterImage')?.value || '';
-    let list = state.products.filter(p => {
+    let filtered = state.products.filter(p => {
       const hay = norm(Object.values(p || {}).join(' '));
       if (terms.length && !terms.every(t => hay.includes(t))) return false;
       if (brand && norm(val(p,'marca')) !== brand) return false;
@@ -296,11 +308,13 @@
       if (imageState === 'without' && mediaUrl(p)) return false;
       return true;
     });
+    const groups = groupProductsByName(filtered);
     buildLocalFacets();
-    state.total = list.length;
-    state.totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    state.groupTotalProducts = filtered.length;
+    state.total = groups.length;
+    state.totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
     state.page = Math.min(state.page, state.totalPages);
-    const slice = list.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
+    const slice = groups.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
     renderFacets();
     renderSummary();
     renderProducts(slice);
@@ -330,7 +344,8 @@
     $('#statTotalTop').textContent = total;
     $('#statImages').textContent = state.summary.with_image ?? 0;
     $('#statStock').textContent = state.summary.with_stock ?? 0;
-    $('#resultSummary').textContent = `Mostrando ${state.products.length} de ${state.total || state.products.length} productos`;
+    const groupText = state.groupTotalProducts ? ` · ${state.groupTotalProducts} variantes/registros` : '';
+    $('#resultSummary').textContent = `Mostrando ${state.products.length} familias de ${state.total || state.products.length}${groupText}`;
     $('#pageSummary').textContent = `Página ${state.page} de ${state.totalPages}`;
     $('#paginationText').textContent = `Página ${state.page} / ${state.totalPages}`;
     $('#btnPrevPage').disabled = state.page <= 1;
@@ -377,29 +392,88 @@
     return [val(product,'sku'), val(product,'nombre'), val(product,'variante'), val(product,'ubicacion'), val(product,'almacen')].join('¦');
   }
 
+  function productGroupKey(product) {
+    if (!product) return '';
+    if (product._groupKey) return product._groupKey;
+    return [norm(val(product,'nombre') || val(product,'sku') || val(product,'barras') || 'sin-nombre'), norm(val(product,'marca'))].join('¦');
+  }
+
+  function uniqueValues(list, key) {
+    const seen = new Map();
+    (list || []).forEach(p => {
+      const v = val(p, key);
+      if (v && !seen.has(norm(v))) seen.set(norm(v), v);
+    });
+    return [...seen.values()];
+  }
+
+  function groupProductsByName(products) {
+    const groups = new Map();
+    (products || []).forEach(p => {
+      const key = productGroupKey(p);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    });
+    return [...groups.entries()].map(([key, items]) => {
+      const preferred = items.find(p => mediaUrl(p)) || items[0] || {};
+      return {
+        ...preferred,
+        _grouped: true,
+        _groupKey: key,
+        _groupName: val(preferred,'nombre') || 'Sin nombre',
+        _groupItems: items,
+        _variantCount: items.length,
+        _sizeOptions: uniqueValues(items, 'talla'),
+        _colorOptions: uniqueValues(items, 'color'),
+        _locationOptions: uniqueValues(items, 'ubicacion'),
+        _warehouseOptions: uniqueValues(items, 'almacen'),
+        _skuOptions: uniqueValues(items, 'sku')
+      };
+    }).sort((a,b)=>String(a._groupName).localeCompare(String(b._groupName),'es'));
+  }
+
   function renderProducts(products) {
     const list = $('#productGrid');
     state.currentResults = products || [];
+    state.currentGroups = products || [];
     if (!products.length) {
       renderEmptyState('No hay productos para mostrar. Revisa la búsqueda o importa tu Sheet.');
       selectProduct(null);
       return;
     }
-    list.innerHTML = products.map((p, idx) => `
-      <div class="product-row" data-index="${idx}" tabindex="0">
-        <div><b>${esc(val(p,'sku') || val(p,'barras') || '—')}</b></div>
-        <div>${esc(val(p,'nombre') || 'Sin nombre')}</div>
-        <div><span class="variant-chip muted small-chip">${esc(val(p,'variante') || val(p,'talla') || '—')}</span></div>
-        <div><span class="loc-pill">${esc(val(p,'ubicacion') || '—')}</span></div>
-        <div>${esc(val(p,'almacen') || '—')}</div>
-      </div>`).join('');
+    list.innerHTML = products.map((p, idx) => {
+      const variants = Number(p._variantCount || p._groupItems?.length || 1);
+      const sizes = p._sizeOptions?.length ? p._sizeOptions : uniqueValues(p._groupItems || [p], 'talla');
+      const colors = p._colorOptions?.length ? p._colorOptions : uniqueValues(p._groupItems || [p], 'color');
+      const locs = p._locationOptions?.length ? p._locationOptions : uniqueValues(p._groupItems || [p], 'ubicacion');
+      const whs = p._warehouseOptions?.length ? p._warehouseOptions : uniqueValues(p._groupItems || [p], 'almacen');
+      const skuLabel = (p._skuOptions?.[0] || val(p,'sku') || val(p,'barras') || '—');
+      return `
+      <div class="product-row product-family-row" data-index="${idx}" tabindex="0" title="Abrir familia de producto">
+        <div><b>${esc(skuLabel)}</b>${variants > 1 ? `<small>${variants} variantes</small>` : ''}</div>
+        <div><strong>${esc(p._groupName || val(p,'nombre') || 'Sin nombre')}</strong><small>${esc(val(p,'marca') || val(p,'categoria') || '')}</small></div>
+        <div><span class="variant-chip muted small-chip">${esc(variants > 1 ? `${variants} variantes` : (val(p,'variante') || '1 variante'))}</span><small>${esc([sizes.length ? `${sizes.length} tallas` : '', colors.length ? `${colors.length} colores` : ''].filter(Boolean).join(' · ') || '—')}</small></div>
+        <div><span class="loc-pill">${esc(locs[0] || val(p,'ubicacion') || '—')}</span>${locs.length > 1 ? `<small>${locs.length} ubicaciones</small>` : ''}</div>
+        <div>${esc(whs[0] || val(p,'almacen') || '—')}${whs.length > 1 ? `<small>${whs.length} almacenes</small>` : ''}</div>
+      </div>`;
+    }).join('');
     $$('.product-row', list).forEach(row => {
-      const pick = () => selectProduct(products[Number(row.dataset.index)]);
+      const pick = () => {
+        const group = products[Number(row.dataset.index)];
+        const item = group?._groupItems?.find(p => mediaUrl(p)) || group?._groupItems?.[0] || group;
+        if (group?._groupItems && !item._groupItems) item._groupItems = group._groupItems;
+        if (group?._groupKey && !item._groupKey) item._groupKey = group._groupKey;
+        selectProduct(item);
+      };
       row.addEventListener('click', pick);
       row.addEventListener('keydown', e => { if (e.key === 'Enter') pick(); });
     });
-    const keep = state.selected && products.find(p => productIdentity(p) === productIdentity(state.selected));
-    selectProduct(keep || products[0]);
+    const keep = state.selected && products.find(p => productGroupKey(p) === productGroupKey(state.selected));
+    const first = keep || products[0];
+    const selected = first?._groupItems?.find(p => mediaUrl(p)) || first?._groupItems?.[0] || first;
+    if (first?._groupItems && selected && !selected._groupItems) selected._groupItems = first._groupItems;
+    if (first?._groupKey && selected && !selected._groupKey) selected._groupKey = first._groupKey;
+    selectProduct(selected);
   }
 
   function renderEmptyState(message) {
@@ -409,10 +483,13 @@
 
   function siblingProducts(product) {
     if (!product) return [];
+    if (Array.isArray(product._groupItems) && product._groupItems.length) return product._groupItems;
+    const group = state.currentGroups?.find(g => productGroupKey(g) === productGroupKey(product));
+    if (group?._groupItems?.length) return group._groupItems;
     const all = Array.isArray(state.publicMode ? state.products : state.currentResults) ? (state.publicMode ? state.products : state.currentResults) : [];
     const name = norm(val(product,'nombre'));
     const marca = norm(val(product,'marca'));
-    return all.filter(p => norm(val(p,'nombre')) === name && (!marca || norm(val(p,'marca')) === marca));
+    return all.flatMap(p => p._groupItems || [p]).filter(p => norm(val(p,'nombre')) === name && (!marca || norm(val(p,'marca')) === marca));
   }
 
   function chipStyle(label) {
@@ -442,7 +519,10 @@
         const currentOther = key === 'talla' ? val(product,'color') : val(product,'talla');
         const exact = siblings.find(p => norm(val(p,key)) === norm(wanted) && (!currentOther || norm(val(p, key === 'talla' ? 'color':'talla')) === norm(currentOther)));
         const fallback = siblings.find(p => norm(val(p,key)) === norm(wanted));
-        selectProduct(exact || fallback || item.product);
+        const picked = exact || fallback || item.product;
+        if (picked && product._groupItems && !picked._groupItems) picked._groupItems = product._groupItems;
+        if (picked && product._groupKey && !picked._groupKey) picked._groupKey = product._groupKey;
+        selectProduct(picked);
       }));
     };
     make('talla', 'activeSizeStrip');
@@ -453,7 +533,7 @@
     state.selected = product;
     $$('.product-row').forEach(row => {
       const p = state.currentResults?.[Number(row.dataset.index)];
-      row.classList.toggle('active', !!p && !!product && productIdentity(p) === productIdentity(product));
+      row.classList.toggle('active', !!p && !!product && productGroupKey(p) === productGroupKey(product));
     });
     if (!product) {
       $('#activeProductMedia').innerHTML = '<div class="media-empty">Selecciona un producto</div>';
@@ -472,7 +552,8 @@
     $('#activeProductWarehouse').textContent = val(product,'almacen') || '—';
     $('#activeProductBrand').textContent = val(product,'marca') || '—';
     $('#activeProductCategory').textContent = val(product,'categoria') || '—';
-    $('#activeProductMeta').textContent = `Variante activa: talla ${val(product,'talla') || '—'}${val(product,'color') ? ` • color ${val(product,'color')}` : ''}`;
+    const family = siblingProducts(product);
+    $('#activeProductMeta').textContent = `Familia agrupada: ${family.length || 1} variante(s) · activa: talla ${val(product,'talla') || '—'}${val(product,'color') ? ` • color ${val(product,'color')}` : ''}`;
     renderVariantChips(product);
     updateExpandedSideCards();
   }
@@ -493,12 +574,18 @@
   }
 
   function modalItems() {
-    return (state.currentResults && state.currentResults.length ? state.currentResults : state.products).filter(Boolean);
+    const source = (state.currentGroups && state.currentGroups.length ? state.currentGroups : (state.currentResults && state.currentResults.length ? state.currentResults : state.products));
+    return source.filter(Boolean).map(g => {
+      const item = g?._groupItems?.find(p => mediaUrl(p)) || g?._groupItems?.[0] || g;
+      if (item && g?._groupItems && !item._groupItems) item._groupItems = g._groupItems;
+      if (item && g?._groupKey && !item._groupKey) item._groupKey = g._groupKey;
+      return item;
+    });
   }
 
   function currentModalIndex() {
     const items = modalItems();
-    return Math.max(0, items.findIndex(p => state.selected && productIdentity(p) === productIdentity(state.selected)));
+    return Math.max(0, items.findIndex(p => state.selected && productGroupKey(p) === productGroupKey(state.selected)));
   }
 
   function ensureSideCard(side) {
@@ -686,6 +773,10 @@
     if (!state.auth) {
       $('#authModal').classList.add('show');
       throw new Error('Necesitas iniciar sesión como administrador.');
+    }
+    if (!isAdmin()) {
+      toast('Modo viewer: solo puedes observar el catálogo.', 'bad');
+      throw new Error('Modo viewer sin permisos de edición.');
     }
   }
 

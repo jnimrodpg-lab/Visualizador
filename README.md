@@ -1,42 +1,33 @@
-# Catálogo Visual para Cliente
+# Catálogo PG — Buscador cliente + Cards agrupadas
 
-App web ligera derivada del ZIP WMS base.
+App web para Cloudflare Pages + Functions + D1.
 
-## Qué conserva
+## Cambios de esta versión
 
-- Login / registro de administrador.
-- Empresa y sucursales.
-- Vinculación con Google Sheets.
-- Lectura de encabezados desde fila 1.
-- Mapeo editable de columnas.
-- Importación de productos desde Google Sheets, hasta 50,000 filas.
-- Búsqueda por SKU, nombre, variante, barras, marca, talla, color, ubicación y almacén.
-- Cards visuales de producto con imagen o video.
-- Link público para cliente por sucursal.
-- Backend Cloudflare Pages Functions + D1.
+- Buscador tipo cliente: simple, directo y sin layout/racks.
+- El producto seleccionado se mantiene dentro del panel de búsqueda.
+- La lista se agrupa por nombre de producto/marca para evitar repetir productos con muchas variantes.
+- Cada familia muestra cantidad de variantes, tallas, colores, ubicaciones y almacenes.
+- Al hacer clic en una fila se selecciona la familia y se actualiza la card principal.
+- Al hacer clic en la card o en “Abrir visor” se despliega la card grande.
+- Dos modos:
+  - Admin: puede vincular Sheets, importar productos, crear sucursales y generar link viewer.
+  - Viewer: solo observa, busca, selecciona y abre cards; no puede editar.
 
-## Qué se eliminó del frontend
+## Cloudflare Pages
 
-- Editor de layout.
-- Editor de racks.
-- Modelos de rack.
-- Vista de mapa / plano.
-- Paneles internos que no son necesarios para consulta de cliente.
+Configuración recomendada:
 
-## Uso rápido
+- Framework preset: None
+- Build command: vacío
+- Build output directory: public
+- Root directory: /
 
-1. Despliega en Cloudflare Pages con D1 vinculado como `DB`.
-2. Ingresa con el usuario admin configurado en variables o usa los defaults del backend si aplica.
-3. Crea o selecciona una sucursal.
-4. En “Vincular Sheet”, pega la URL pública o compartida del Google Sheet.
-5. Escribe el nombre de hoja, por ejemplo `Productos`.
-6. Presiona “Leer encabezados”, revisa el mapeo y luego “Importar productos”.
-7. Genera el link cliente desde “Configuración”.
+## D1
 
-## Encabezados recomendados
+Binding requerido:
 
-La app reconoce automáticamente columnas como:
+- Variable name: DB
+- Database: wms-industrial-db
 
-`Genero, Categoria, Estado, marca, cod / modelo, GROSOR, talla, color, Linea, Barras, Sku, Nombre, Variante, Zona, Estante, Nivel, Slot, Ubicación, Almacen, P.Lista(+igv), Cant. Restock, Imagen, Video`
-
-También puedes ajustar manualmente el mapeo antes de importar.
+El archivo `wrangler.toml` ya está preparado para Pages + D1.
