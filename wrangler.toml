@@ -1,4 +1,4 @@
-name = "catalogo-visual-cliente"
+name = "catalogo-pg"
 compatibility_date = "2026-03-31"
 pages_build_output_dir = "public"
 
