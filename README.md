@@ -16,3 +16,7 @@ App Cloudflare Pages + Functions + D1 para consulta de productos desde Google Sh
 - Build command: vacío
 - Build output directory: `public`
 - D1 binding: `DB`
+
+
+V6
+- Corrige jerarquía visual del visor: la card del producto seleccionado queda al frente y las tarjetas Anterior / Siguiente quedan detrás.
