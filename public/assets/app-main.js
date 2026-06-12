@@ -369,6 +369,16 @@
     return (text.match(/\/file\/d\/([^/]+)/) || text.match(/[?&]id=([^&]+)/) || [])[1] || '';
   }
 
+
+  function renderThumb(product) {
+    const src = val(product,'imagen') || val(product,'video');
+    if (!src) return `<div class="group-thumb-empty">—</div>`;
+    const id = driveId(src);
+    const img = id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w320` : src;
+    if (/\.mp4($|\?)/i.test(src) && !id) return `<video src="${esc(src)}" muted playsinline></video>`;
+    return `<img src="${esc(img)}" alt="${esc(val(product,'nombre') || 'Producto')}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;group-thumb-empty&quot;>—</div>'">`;
+  }
+
   function renderMedia(product, mode = 'card') {
     const video = videoUrl(product);
     const img = val(product,'imagen');
@@ -448,13 +458,21 @@
       const locs = p._locationOptions?.length ? p._locationOptions : uniqueValues(p._groupItems || [p], 'ubicacion');
       const whs = p._warehouseOptions?.length ? p._warehouseOptions : uniqueValues(p._groupItems || [p], 'almacen');
       const skuLabel = (p._skuOptions?.[0] || val(p,'sku') || val(p,'barras') || '—');
+      const title = p._groupName || val(p,'nombre') || 'Sin nombre';
+      const subtitle = [val(p,'marca'), val(p,'categoria')].filter(Boolean).join(' · ');
       return `
-      <div class="product-row product-family-row" data-index="${idx}" tabindex="0" title="Abrir familia de producto">
-        <div><b>${esc(skuLabel)}</b>${variants > 1 ? `<small>${variants} variantes</small>` : ''}</div>
-        <div><strong>${esc(p._groupName || val(p,'nombre') || 'Sin nombre')}</strong><small>${esc(val(p,'marca') || val(p,'categoria') || '')}</small></div>
-        <div><span class="variant-chip muted small-chip">${esc(variants > 1 ? `${variants} variantes` : (val(p,'variante') || '1 variante'))}</span><small>${esc([sizes.length ? `${sizes.length} tallas` : '', colors.length ? `${colors.length} colores` : ''].filter(Boolean).join(' · ') || '—')}</small></div>
-        <div><span class="loc-pill">${esc(locs[0] || val(p,'ubicacion') || '—')}</span>${locs.length > 1 ? `<small>${locs.length} ubicaciones</small>` : ''}</div>
-        <div>${esc(whs[0] || val(p,'almacen') || '—')}${whs.length > 1 ? `<small>${whs.length} almacenes</small>` : ''}</div>
+      <div class="product-row product-family-row model-one-row" data-index="${idx}" tabindex="0" title="Seleccionar producto agrupado">
+        <div class="group-product-cell">
+          <div class="group-thumb">${renderThumb(p)}</div>
+          <div class="group-info">
+            <strong>${esc(title)}</strong>
+            <small>${esc(subtitle || `SKU ${skuLabel}`)}</small>
+            <span class="group-location-mini">${esc(locs[0] || val(p,'ubicacion') || whs[0] || 'Sin ubicación')}</span>
+          </div>
+        </div>
+        <div><span class="metric-pill">${esc(variants)}</span><small>${esc(variants === 1 ? (val(p,'variante') || '1 variante') : 'variantes')}</small></div>
+        <div><span class="metric-pill">${esc(colors.length || '—')}</span><small>${esc(colors.slice(0,3).join(' · ') || 'colores')}</small></div>
+        <div><span class="metric-pill">${esc(sizes.length || '—')}</span><small>${esc(sizes.slice(0,4).join(' · ') || 'tallas')}</small></div>
       </div>`;
     }).join('');
     $$('.product-row', list).forEach(row => {

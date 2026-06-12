@@ -58,11 +58,11 @@
       </header>
 
       <section class="catalog-view view active" id="viewCatalog">
-        <div class="client-search-shell glass-panel">
+        <div class="client-search-shell glass-panel model-one-search">
           <div class="search-client-head">
             <div>
-              <strong>Búsqueda de producto</strong>
-              <span>Barra simple + cards visuales para el cliente</span>
+              <strong>Explorador de productos</strong>
+              <span>Busca, agrupa por nombre y abre la card visual del producto.</span>
             </div>
             <div class="search-client-actions">
               <span class="count-pill"><b id="statTotalTop">0</b> productos</span>
@@ -70,7 +70,7 @@
             </div>
           </div>
           <div class="search-client-row">
-            <input id="searchInput" placeholder="Buscar por SKU, nombre, ubicación, marca o código de barras..." autocomplete="off" />
+            <input id="searchInput" placeholder="Buscar producto por SKU, nombre, marca, ubicación o código de barras..." autocomplete="off" />
             <button class="icon-search-btn" id="btnSearch" type="button">⌕</button>
             <button class="scan-btn" id="btnScanFake" type="button">Escanear QR / barras</button>
           </div>
@@ -79,56 +79,59 @@
             <select id="filterCategory"><option value="">Todas las categorías</option></select>
             <select id="filterWarehouse"><option value="">Todos los almacenes</option></select>
             <select id="filterImage"><option value="">Imagen: todos</option><option value="with">Con imagen</option><option value="without">Sin imagen</option></select>
-            <button class="ghost-btn" id="btnClearFilters" type="button">Limpiar</button>
+            <button class="ghost-btn" id="btnClearFilters" type="button">Limpiar filtros</button>
           </div>
         </div>
 
-        <div class="product-client-stage glass-panel">
-          <article class="search-card active-product-card is-clickable" id="activeProductCard" tabindex="0" aria-label="Abrir visor de producto">
-            <button class="search-card-expand-close" id="activeProductCardClose" type="button" aria-label="Cerrar visor">×</button>
-            <div class="product-photo" id="activeProductMedia"><div class="media-empty">Selecciona un producto</div></div>
-            <div class="search-card-body">
-              <div class="eyebrow green">Producto</div>
-              <div class="search-card-title-row">
-                <div>
-                  <div class="search-card-title" id="activeProductName">Busca o selecciona un producto</div>
-                  <div class="search-card-sku" id="activeProductSku">SKU —</div>
-                </div>
-              </div>
-              <div class="search-card-meta">
-                <div class="search-meta-block"><span class="search-meta-label">Ubicación</span><b class="search-meta-value" id="activeProductLocation">—</b></div>
-                <div class="search-meta-block"><span class="search-meta-label">Ubicación en almacén</span><b class="search-meta-value store" id="activeProductWarehouse">—</b></div>
-                <div class="search-meta-block"><span class="search-meta-label">Marca</span><b class="search-meta-value" id="activeProductBrand">—</b></div>
-                <div class="search-meta-block"><span class="search-meta-label">Categoría</span><b class="search-meta-value" id="activeProductCategory">—</b></div>
-              </div>
-              <div class="active-meta-line" id="activeProductMeta">Variante activa: —</div>
-              <div class="variant-groups">
-                <div class="variant-group"><span class="variant-group-label">Talla</span><div class="variant-strip" id="activeSizeStrip"></div></div>
-                <div class="variant-group"><span class="variant-group-label">Color</span><div class="variant-strip" id="activeColorStrip"></div></div>
-              </div>
-              <div class="search-card-actions-row">
-                <button class="search-card-action action-btn" id="btnCopyProductInfo" type="button">Copiar información</button>
-                <button class="search-card-action action-btn primary" id="btnOpenProductViewer" type="button">Abrir visor</button>
-              </div>
-              <div class="search-card-expand-hint">Haz clic para ver card grande</div>
+        <div class="product-client-stage glass-panel model-one-board">
+          <div class="groups-panel">
+            <div class="result-summary-row model-one-summary">
+              <span id="resultSummary">Mostrando 0 productos</span>
+              <span id="pageSummary">Página 1</span>
             </div>
-          </article>
-
-          <div class="result-summary-row">
-            <span id="resultSummary">Mostrando 0 productos</span>
-            <span id="pageSummary">Página 1</span>
+            <div class="product-table-wrap model-one-list">
+              <div class="product-head"><div>Producto</div><div>Variantes</div><div>Colores</div><div>Tallas</div></div>
+              <div class="product-list" id="productGrid"></div>
+            </div>
+            <div class="pagination inline-pagination">
+              <button class="ghost-btn" id="btnPrevPage" type="button">←</button>
+              <span id="paginationText">Página 1</span>
+              <button class="ghost-btn" id="btnNextPage" type="button">→</button>
+            </div>
           </div>
 
-          <div class="product-table-wrap">
-            <div class="product-head"><div>SKU</div><div>Nombre</div><div>Variante</div><div>Ubicación</div><div>Almacén</div></div>
-            <div class="product-list" id="productGrid"></div>
-          </div>
-        </div>
-
-        <div class="pagination glass-panel">
-          <button class="ghost-btn" id="btnPrevPage" type="button">←</button>
-          <span id="paginationText">Página 1</span>
-          <button class="ghost-btn" id="btnNextPage" type="button">→</button>
+          <aside class="selected-panel">
+            <div class="selected-panel-title">Producto seleccionado</div>
+            <article class="search-card active-product-card is-clickable" id="activeProductCard" tabindex="0" aria-label="Abrir visor de producto">
+              <button class="search-card-expand-close" id="activeProductCardClose" type="button" aria-label="Cerrar visor">×</button>
+              <div class="product-photo" id="activeProductMedia"><div class="media-empty">Selecciona un producto</div></div>
+              <div class="search-card-body">
+                <div class="eyebrow green">Producto</div>
+                <div class="search-card-title-row">
+                  <div>
+                    <div class="search-card-title" id="activeProductName">Busca o selecciona un producto</div>
+                    <div class="search-card-sku" id="activeProductSku">SKU —</div>
+                  </div>
+                </div>
+                <div class="search-card-meta">
+                  <div class="search-meta-block"><span class="search-meta-label">Ubicación</span><b class="search-meta-value" id="activeProductLocation">—</b></div>
+                  <div class="search-meta-block"><span class="search-meta-label">Almacén</span><b class="search-meta-value store" id="activeProductWarehouse">—</b></div>
+                  <div class="search-meta-block"><span class="search-meta-label">Marca</span><b class="search-meta-value" id="activeProductBrand">—</b></div>
+                  <div class="search-meta-block"><span class="search-meta-label">Categoría</span><b class="search-meta-value" id="activeProductCategory">—</b></div>
+                </div>
+                <div class="active-meta-line" id="activeProductMeta">Variante activa: —</div>
+                <div class="variant-groups">
+                  <div class="variant-group"><span class="variant-group-label">Talla</span><div class="variant-strip" id="activeSizeStrip"></div></div>
+                  <div class="variant-group"><span class="variant-group-label">Color</span><div class="variant-strip" id="activeColorStrip"></div></div>
+                </div>
+                <div class="search-card-actions-row">
+                  <button class="search-card-action action-btn" id="btnCopyProductInfo" type="button">Copiar</button>
+                  <button class="search-card-action action-btn primary" id="btnOpenProductViewer" type="button">Abrir visor</button>
+                </div>
+                <div class="search-card-expand-hint">Haz clic para ver card grande</div>
+              </div>
+            </article>
+          </aside>
         </div>
       </section>
 
