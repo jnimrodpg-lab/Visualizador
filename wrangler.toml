@@ -1,0 +1,15 @@
+name = "catalogo-visual-cliente"
+compatibility_date = "2026-03-31"
+pages_build_output_dir = "public"
+
+[vars]
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123"
+DEFAULT_COMPANY_NAME = "Catálogo Visual"
+DEFAULT_COMPANY_CODE = "CAT-CF"
+DB_NAME = "wms-industrial-db"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wms-industrial-db"
+database_id = "a287bf47-2f4c-4084-a70e-ade661c46ce4"
