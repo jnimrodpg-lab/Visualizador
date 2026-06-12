@@ -154,6 +154,12 @@
     $('#btnCreateBranch').addEventListener('click', createBranch);
     $('#btnShareViewer').addEventListener('click', generateViewerLink);
     $('#btnCopyViewer').addEventListener('click', generateViewerLink);
+    $('#btnOpenProductViewer')?.addEventListener('click', e => { e.stopPropagation(); openActiveProductCard(); });
+    $('#btnCopyProductInfo')?.addEventListener('click', e => { e.stopPropagation(); copySelectedProductInfo(); });
+    $('#btnScanFake')?.addEventListener('click', () => toast('Puedes pegar o escanear el código con un lector físico en la barra de búsqueda.'));
+    $('#searchCardOverlay')?.addEventListener('click', closeActiveProductCard);
+    $('#activeProductCardClose')?.addEventListener('click', e => { e.stopPropagation(); closeActiveProductCard(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeActiveProductCard(); if ($('#activeProductCard')?.classList.contains('search-card-expanded')) handleExpandedKeys(e); });
   }
 
   function setAuthMode(mode) {
@@ -319,7 +325,9 @@
   }
 
   function renderSummary() {
-    $('#statTotal').textContent = state.summary.total ?? state.total ?? 0;
+    const total = state.summary.total ?? state.total ?? 0;
+    $('#statTotal').textContent = total;
+    $('#statTotalTop').textContent = total;
     $('#statImages').textContent = state.summary.with_image ?? 0;
     $('#statStock').textContent = state.summary.with_stock ?? 0;
     $('#resultSummary').textContent = `Mostrando ${state.products.length} de ${state.total || state.products.length} productos`;
@@ -331,7 +339,7 @@
 
   function val(product, key) {
     const aliases = {
-      sku:['sku','Sku','SKU'], nombre:['nombre','Nombre','name','producto'], variante:['variante','Variante','modelo','cod_modelo'], marca:['marca','brand'], categoria:['categoria','categoría','category'], almacen:['almacen','almacén','warehouse'], ubicacion:['ubicacion','ubicación','location'], stock:['stock','cantidad','cant','Cant. Restock'], imagen:['imagen','image','foto','url_imagen'], video:['video','link_video','url_video']
+      sku:['sku','Sku','SKU'], nombre:['nombre','Nombre','name','producto'], variante:['variante','Variante','modelo','cod_modelo','cod / modelo'], marca:['marca','brand'], categoria:['categoria','categoría','category'], almacen:['almacen','almacén','warehouse'], ubicacion:['ubicacion','ubicación','location'], stock:['stock','cantidad','cant','Cant. Restock'], imagen:['imagen','image','foto','url_imagen','link imagen'], video:['video','link_video','url_video','link video'], color:['color','Color'], talla:['talla','Talla','size'], barras:['barras','Barras','barcode','codigo de barras']
     };
     const keys = aliases[key] || [key];
     for (const k of keys) if (product?.[k] != null && String(product[k]).trim()) return String(product[k]).trim();
@@ -350,6 +358,7 @@
     const video = videoUrl(product);
     const img = val(product,'imagen');
     const src = video || img;
+    const wrapClass = mode === 'card' ? 'product-photo' : 'product-photo';
     if (!src) return `<div class="media-empty">Sin imagen</div>`;
     const id = driveId(src);
     if (video) {
@@ -360,33 +369,37 @@
       if (id) return `<iframe loading="lazy" src="https://drive.google.com/file/d/${esc(id)}/preview" allowfullscreen></iframe>`;
       if (/\.mp4($|\?)/i.test(src)) return `<video src="${esc(src)}" controls ${mode === 'card' ? 'muted' : ''}></video>`;
     }
-    const finalSrc = id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1200` : src;
-    return `<img src="${esc(finalSrc)}" alt="${esc(val(product,'nombre') || 'Producto')}" loading="lazy" onerror="this.closest('.featured-media,.product-card-media').innerHTML='<div class=&quot;media-empty&quot;>Imagen no disponible</div>'">`;
+    const finalSrc = id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1600` : src;
+    return `<img src="${esc(finalSrc)}" alt="${esc(val(product,'nombre') || 'Producto')}" loading="lazy" onerror="this.parentElement.classList.add('empty');this.remove();">`;
+  }
+
+  function productIdentity(product) {
+    return [val(product,'sku'), val(product,'nombre'), val(product,'variante'), val(product,'ubicacion'), val(product,'almacen')].join('¦');
   }
 
   function renderProducts(products) {
-    const grid = $('#productGrid');
+    const list = $('#productGrid');
+    state.currentResults = products || [];
     if (!products.length) {
       renderEmptyState('No hay productos para mostrar. Revisa la búsqueda o importa tu Sheet.');
+      selectProduct(null);
       return;
     }
-    grid.innerHTML = products.map((p, idx) => `
-      <article class="product-card" data-index="${idx}" tabindex="0">
-        <div class="product-card-media">${renderMedia(p, 'card')}</div>
-        <div class="product-card-body">
-          <div class="sku">${esc(val(p,'sku') || val(p,'barras') || 'Sin SKU')}</div>
-          <h3>${esc(val(p,'nombre') || 'Producto sin nombre')}</h3>
-          <div class="card-tags">
-            ${[val(p,'marca'), val(p,'variante'), val(p,'color'), val(p,'talla'), val(p,'ubicacion'), val(p,'almacen')].filter(Boolean).slice(0,6).map(x => `<span>${esc(x)}</span>`).join('')}
-          </div>
-        </div>
-      </article>`).join('');
-    $$('.product-card', grid).forEach(card => {
-      const pick = () => selectProduct(products[Number(card.dataset.index)]);
-      card.addEventListener('click', pick);
-      card.addEventListener('keydown', e => { if (e.key === 'Enter') pick(); });
+    list.innerHTML = products.map((p, idx) => `
+      <div class="product-row" data-index="${idx}" tabindex="0">
+        <div><b>${esc(val(p,'sku') || val(p,'barras') || '—')}</b></div>
+        <div>${esc(val(p,'nombre') || 'Sin nombre')}</div>
+        <div><span class="variant-chip muted small-chip">${esc(val(p,'variante') || val(p,'talla') || '—')}</span></div>
+        <div><span class="loc-pill">${esc(val(p,'ubicacion') || '—')}</span></div>
+        <div>${esc(val(p,'almacen') || '—')}</div>
+      </div>`).join('');
+    $$('.product-row', list).forEach(row => {
+      const pick = () => selectProduct(products[Number(row.dataset.index)]);
+      row.addEventListener('click', pick);
+      row.addEventListener('keydown', e => { if (e.key === 'Enter') pick(); });
     });
-    selectProduct(state.selected && products.find(p => val(p,'sku') === val(state.selected,'sku')) ? state.selected : products[0]);
+    const keep = state.selected && products.find(p => productIdentity(p) === productIdentity(state.selected));
+    selectProduct(keep || products[0]);
   }
 
   function renderEmptyState(message) {
@@ -394,20 +407,158 @@
     $('#resultSummary').textContent = 'Mostrando 0 productos';
   }
 
+  function siblingProducts(product) {
+    if (!product) return [];
+    const all = Array.isArray(state.publicMode ? state.products : state.currentResults) ? (state.publicMode ? state.products : state.currentResults) : [];
+    const name = norm(val(product,'nombre'));
+    const marca = norm(val(product,'marca'));
+    return all.filter(p => norm(val(p,'nombre')) === name && (!marca || norm(val(p,'marca')) === marca));
+  }
+
+  function chipStyle(label) {
+    const c = norm(label);
+    const map = [
+      [['blanco','white'], '#f8fafc', '#334155', '#e2e8f0'], [['negro','black'], '#151922', '#f8fafc', '#31394b'],
+      [['amarillo','yellow'], '#fff1a8', '#705d00', '#f7d85d'], [['beige','nude'], '#eadfcf', '#6f5d49', '#dac7ad'],
+      [['rojo','red'], '#ffd3d3', '#842222', '#f6aaaa'], [['azul','blue'], '#d9e8ff', '#254b87', '#abc8f5'],
+      [['verde','green'], '#d9fbe8', '#1f6a42', '#a8eac4'], [['lila','morado','azalea'], '#eadcff', '#624a99', '#d6c2fa']
+    ];
+    const hit = map.find(([keys]) => keys.some(k => c.includes(k)));
+    return hit ? `background:${hit[1]};color:${hit[2]};border-color:${hit[3]}` : '';
+  }
+
+  function renderVariantChips(product) {
+    const siblings = siblingProducts(product);
+    const make = (key, hostId) => {
+      const host = $(`#${hostId}`);
+      if (!host) return;
+      const seen = new Map();
+      siblings.forEach(p => { const v = val(p,key); if (v && !seen.has(norm(v))) seen.set(norm(v), { label:v, product:p }); });
+      if (!seen.size) { host.innerHTML = '<span class="muted tiny">—</span>'; return; }
+      host.innerHTML = [...seen.values()].map(item => `<button type="button" class="variant-chip ${norm(item.label)===norm(val(product,key))?'active':''} ${key==='color'?'variant-color':''}" data-key="${key}" data-value="${esc(item.label)}" style="${key==='color'?chipStyle(item.label):''}">${esc(item.label)}</button>`).join('');
+      $$('button', host).forEach(btn => btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const wanted = btn.dataset.value;
+        const currentOther = key === 'talla' ? val(product,'color') : val(product,'talla');
+        const exact = siblings.find(p => norm(val(p,key)) === norm(wanted) && (!currentOther || norm(val(p, key === 'talla' ? 'color':'talla')) === norm(currentOther)));
+        const fallback = siblings.find(p => norm(val(p,key)) === norm(wanted));
+        selectProduct(exact || fallback || item.product);
+      }));
+    };
+    make('talla', 'activeSizeStrip');
+    make('color', 'activeColorStrip');
+  }
+
   function selectProduct(product) {
     state.selected = product;
-    $('#featuredMedia').innerHTML = renderMedia(product, 'featured');
-    $('#featuredBrand').textContent = val(product,'marca') || val(product,'categoria') || 'Producto';
-    $('#featuredName').textContent = val(product,'nombre') || 'Producto sin nombre';
-    $('#featuredSku').textContent = `SKU ${val(product,'sku') || '—'}`;
-    $('#featuredVariant').textContent = val(product,'variante') || '—';
-    $('#featuredColor').textContent = product.color || '—';
-    $('#featuredSize').textContent = product.talla || '—';
-    $('#featuredLocation').textContent = val(product,'ubicacion') || [product.zona, product.estante, product.nivel, product.slot].filter(Boolean).join(' · ') || '—';
-    $('#featuredWarehouse').textContent = val(product,'almacen') || '—';
-    $('#featuredStock').textContent = val(product,'stock') || '—';
-    const raw = product.raw && typeof product.raw === 'object' ? product.raw : product;
-    $('#featuredRaw').innerHTML = Object.entries(raw).filter(([,v]) => String(v ?? '').trim()).slice(0,18).map(([k,v]) => `<span>${esc(k)}: ${esc(v)}</span>`).join('');
+    $$('.product-row').forEach(row => {
+      const p = state.currentResults?.[Number(row.dataset.index)];
+      row.classList.toggle('active', !!p && !!product && productIdentity(p) === productIdentity(product));
+    });
+    if (!product) {
+      $('#activeProductMedia').innerHTML = '<div class="media-empty">Selecciona un producto</div>';
+      $('#activeProductName').textContent = 'Busca o selecciona un producto';
+      $('#activeProductSku').textContent = 'SKU —';
+      ['activeProductLocation','activeProductWarehouse','activeProductBrand','activeProductCategory'].forEach(id => $(`#${id}`).textContent = '—');
+      $('#activeProductMeta').textContent = 'Variante activa: —';
+      $('#activeSizeStrip').innerHTML = '';
+      $('#activeColorStrip').innerHTML = '';
+      return;
+    }
+    $('#activeProductMedia').innerHTML = renderMedia(product, 'featured');
+    $('#activeProductName').textContent = val(product,'nombre') || 'Sin nombre';
+    $('#activeProductSku').textContent = `SKU ${val(product,'sku') || val(product,'barras') || '—'}`;
+    $('#activeProductLocation').textContent = val(product,'ubicacion') || [product.zona, product.estante, product.nivel, product.slot].filter(Boolean).join(' · ') || '—';
+    $('#activeProductWarehouse').textContent = val(product,'almacen') || '—';
+    $('#activeProductBrand').textContent = val(product,'marca') || '—';
+    $('#activeProductCategory').textContent = val(product,'categoria') || '—';
+    $('#activeProductMeta').textContent = `Variante activa: talla ${val(product,'talla') || '—'}${val(product,'color') ? ` • color ${val(product,'color')}` : ''}`;
+    renderVariantChips(product);
+    updateExpandedSideCards();
+  }
+
+  function copySelectedProductInfo() {
+    const p = state.selected;
+    if (!p) return toast('Selecciona un producto primero.', 'bad');
+    const text = [
+      val(p,'nombre') || 'Sin nombre',
+      `SKU: ${val(p,'sku') || '—'}`,
+      `Marca: ${val(p,'marca') || '—'}`,
+      `Talla: ${val(p,'talla') || '—'}`,
+      `Color: ${val(p,'color') || '—'}`,
+      `Ubicación: ${val(p,'ubicacion') || '—'}`,
+      `Almacén: ${val(p,'almacen') || '—'}`
+    ].join('\n');
+    navigator.clipboard?.writeText(text).then(() => toast('Información copiada.')).catch(() => toast(text));
+  }
+
+  function modalItems() {
+    return (state.currentResults && state.currentResults.length ? state.currentResults : state.products).filter(Boolean);
+  }
+
+  function currentModalIndex() {
+    const items = modalItems();
+    return Math.max(0, items.findIndex(p => state.selected && productIdentity(p) === productIdentity(state.selected)));
+  }
+
+  function ensureSideCard(side) {
+    let el = document.getElementById(`expandedSideCard-${side}`);
+    if (el) return el;
+    el = document.createElement('button');
+    el.type = 'button';
+    el.id = `expandedSideCard-${side}`;
+    el.className = `search-card-side-nav ${side}`;
+    el.innerHTML = `<div class="side-nav-kicker">${side === 'left' ? 'Anterior' : 'Siguiente'}</div><div class="side-nav-media"></div><div class="side-nav-body"><div class="side-nav-title">—</div><div class="side-nav-sku">SKU —</div><div class="side-nav-mini"><div class="side-nav-pill"><span class="side-nav-label">Ubicación</span><span class="side-nav-value">—</span></div></div></div><div class="side-nav-hint">Haz clic para cambiar de producto</div>`;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function fillSideCard(el, product, side) {
+    if (!product) { el.classList.remove('visible'); return; }
+    el.querySelector('.side-nav-kicker').textContent = side === 'left' ? 'Anterior' : 'Siguiente';
+    el.querySelector('.side-nav-media').innerHTML = renderMedia(product, 'card');
+    el.querySelector('.side-nav-title').textContent = val(product,'nombre') || 'Sin nombre';
+    el.querySelector('.side-nav-sku').textContent = `SKU ${val(product,'sku') || '—'}`;
+    el.querySelector('.side-nav-value').textContent = val(product,'ubicacion') || '—';
+    el.onclick = e => { e.preventDefault(); e.stopPropagation(); selectProduct(product); };
+    el.classList.add('visible');
+  }
+
+  function updateExpandedSideCards() {
+    const card = $('#activeProductCard');
+    if (!card?.classList.contains('search-card-expanded') || window.innerWidth <= 980) return hideExpandedSideCards();
+    const items = modalItems();
+    if (items.length <= 1) return hideExpandedSideCards();
+    const idx = currentModalIndex();
+    fillSideCard(ensureSideCard('left'), items[(idx - 1 + items.length) % items.length], 'left');
+    fillSideCard(ensureSideCard('right'), items[(idx + 1) % items.length], 'right');
+  }
+
+  function hideExpandedSideCards() {
+    ['left','right'].forEach(side => document.getElementById(`expandedSideCard-${side}`)?.classList.remove('visible'));
+  }
+
+  function openActiveProductCard() {
+    if (!state.selected) return toast('Selecciona un producto primero.', 'bad');
+    $('#activeProductCard')?.classList.add('search-card-expanded');
+    $('#searchCardOverlay')?.classList.add('active');
+    document.body.classList.add('search-card-modal-open');
+    setTimeout(updateExpandedSideCards, 30);
+  }
+
+  function closeActiveProductCard() {
+    $('#activeProductCard')?.classList.remove('search-card-expanded');
+    $('#searchCardOverlay')?.classList.remove('active');
+    document.body.classList.remove('search-card-modal-open');
+    hideExpandedSideCards();
+  }
+
+  function handleExpandedKeys(e) {
+    const items = modalItems();
+    if (items.length <= 1) return;
+    const idx = currentModalIndex();
+    if (e.key === 'ArrowLeft') { e.preventDefault(); selectProduct(items[(idx - 1 + items.length) % items.length]); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); selectProduct(items[(idx + 1) % items.length]); }
   }
 
   function autoMap(headers) {
